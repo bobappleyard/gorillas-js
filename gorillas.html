@@ -1,0 +1,17 @@
+<html>
+<head>
+    <title>Gorillas -- The Javascript Edition</title>
+    <script type="text/javascript" src="gorillas.js"></script>
+</head>
+<body>
+    <canvas id="viewport" width="640" height="400"></canvas>
+    <script type="text/javascript">
+var gorillas = new Gorillas(document.getElementById('viewport'));
+    </script>
+    <form onsubmit="try { gorillas.throwBanana(this.angle.value, this.velocity.value); } catch (e) {console.log(e);}; return false;">
+        <label for="angle">Angle: </label><input type="text" name="angle" id="angle"/>
+        <label for="velocity">Velocity: </label><input type="text" name="velocity" id="velocity"/>
+        <input type="submit" value="Throw"/>
+    </form>
+</body>
+</html>
