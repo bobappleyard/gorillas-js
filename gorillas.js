@@ -1,23 +1,9 @@
-function quantize(min, max, block) {
-    return (Math.round(Math.random() * max) + min) * block;
-}
-
-function between(value, min, width) {
-    return (value >= min) && (value < min + width);
-}
-
-function colorEq(a, b) {
-    var f = Math.pow(a[0] - b[0], 2) +
-            Math.pow(a[1] - b[1], 2) +
-            Math.pow(a[2] - b[2], 2);
-    return f < 100;
-//    return a[0] == b[0] &&  a[1] == b[1] && a[2] == b[2];
-}
-
 function Gorillas(canvasElement) {
     this.throwBanana = throwBanana;
-
-    var gravity = 9.8 / 10;
+    
+    var fps = 15;
+    var gravity = 9.8 / fps;
+    var quantum = 1000 / fps;
     var windowWidth = 14;
     var windowHeight = 20;
     var windowPaddingWidth = 4;
@@ -26,6 +12,7 @@ function Gorillas(canvasElement) {
     var backgroundColor = "rgb(4,2,172)";
     var backgroundTest = [4, 2, 172];
     var sunTest = [252, 254, 4];
+    var gorillaTest = [252, 170, 84];
     var buildingColors = [
             "rgb(4,170,172)",  // Teal
             "rgb(172,2,4)",    // Red
@@ -33,19 +20,46 @@ function Gorillas(canvasElement) {
     ];
     var windowColors = [
             "rgb(252,254,84)",  // On
-            "rgb(84,86,84)" // Off
+            "rgb(84,86,84)"     // Off
     ];
+    var HIT_NOTHING = 0;
+    var HIT_BUILDING = 1;
+    var HIT_GORILLA = 2;
     
     var turn = 0;
+    var scores = [0, 0];
     var gorillaPositions = [];
+    var running = false;
+
     var canvas = canvasElement.getContext('2d');
     var sunImage = new Image();
     sunImage.src = 'sun.png';
     var gorillaImage = new Image();
-    gorillaImage.src = 'gorilla-resting.png';
-    
+    gorillaImage.src = 'gorilla-resting.png';  
     
     drawLandscape();
+    
+    // Utility functions
+    function quantize(min, max, block) {
+        return (Math.round(Math.random() * max) + min) * block;
+    }
+
+    function between(value, min, width) {
+        return (value >= min) && (value < min + width);
+    }
+
+    function colorEq(a, b) {
+        var f = Math.pow(a[0] - b[0], 2) +
+                Math.pow(a[1] - b[1], 2) +
+                Math.pow(a[2] - b[2], 2);
+        return f < 100;
+    }
+    
+    // Background
+    function clearSun() {
+        canvas.fillStyle = backgroundColor;
+        canvas.fillRect((canvasElement.width - sunImage.width) / 2, 15, sunImage.width, sunImage.height);
+    }
     
     function drawSun() {
         canvas.drawImage(sunImage, Math.round((canvasElement.width - sunImage.width) / 2), 15);
@@ -104,43 +118,51 @@ function Gorillas(canvasElement) {
     }
     
     function throwBanana(angle, speed) {
-        var bananaRadius = 5;
-        var lastX, lastY;
-        
-        var actualAngle = Math.PI * (turn == 0 ? angle : 180 - angle) / 180;
-        var velocity = [Math.cos(actualAngle) * speed, -Math.sin(actualAngle) * speed];
-        
-        
-        drawBanana(gorillaPositions[turn][0] + (turn == 0 ? bananaRadius : gorillaImage.width - bananaRadius), 
-                   gorillaPositions[turn][1] - bananaRadius);
-        
-        var quantum = 100;
-        var timerId = setInterval(function() {
-            var hit = drawBanana(lastX + (quantum / 1000) * velocity[0], 
-                                 lastY + (quantum / 1000) * velocity[1]);
-            drawSun();
+        if (!running) {
+            running = true;
+            var bananaRadius = 5;
             
-            velocity[1] += gravity;
+            // Initial conditions
+            var actualAngle = Math.PI * (turn == 0 ? angle : 180 - angle) / 180;
+            var velocity = [Math.cos(actualAngle) * speed, -Math.sin(actualAngle) * speed];
+            var x = gorillaPositions[turn][0] + (turn == 0 ? bananaRadius : gorillaImage.width - bananaRadius);
+            var y = gorillaPositions[turn][1] - bananaRadius;
+            drawBanana();
             
-            if (hit || lastY > canvasElement.height + bananaRadius) {
-                clearInterval(timerId);
-            }
-        }, quantum);
-        
-        
-        turn = (turn + 1) % 2;
-        
-        function drawBanana(x, y) {
-            if (typeof(lastX) != 'undefined') {
-                canvas.fillStyle = backgroundColor;
-                canvas.beginPath();
-                canvas.arc(lastX, lastY, bananaRadius + 1, 0, 2 * Math.PI, false);
-                canvas.fill();                
-            } else {
-                lastX = x;
-                lastY = y;
-            }
+            // Projectile simulation
+            var banana = setInterval(function() {
+                clearBanana();
+                clearSun();
+
+                x += (quantum / 1000) * velocity[0];
+                y += (quantum / 1000) * velocity[1];
+
+                var hit = hitTest();
+                drawSun();
+                
+                velocity[1] += gravity;
+                
+                switch (hit) {
+                case HIT_BUILDING:               
+                    stop();
+                    clearBanana();
+                    break;
+                case HIT_GORILLA:
+                    stop();
+                    killGorilla()
+                    break;
+                default:
+                    drawBanana();
+                    if (y > canvasElement.height + bananaRadius) {
+                        stop();
+                    }
+                }
+            }, quantum);
             
+            turn = (turn + 1) % 2;
+        }
+        
+        function hitTest() {
             var magV = Math.sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
             var unitV = [velocity[0] / magV, velocity[1] / magV];
             var testPixel = [Math.round(x + unitV[0] * bananaRadius), 
@@ -149,21 +171,53 @@ function Gorillas(canvasElement) {
             if (between(testPixel[0], 0, canvasElement.width) &&
                 between(testPixel[1], 0, canvasElement.height)) {
                 var pixel = canvas.getImageData(testPixel[0], testPixel[1], 1, 1);
-                if ((!colorEq(pixel.data, backgroundTest)) &&
-                    (!colorEq(pixel.data, sunTest))) {
-                    return true;
+                if (colorEq(pixel.data, gorillaTest)) {
+                    return HIT_GORILLA;
+                }
+                if (!colorEq(pixel.data, backgroundTest)) {
+                    return HIT_BUILDING;
                 }
             }
-
+            return HIT_NOTHING;
+        }
+        
+        function stop() {
+            clearInterval(banana);
+            running = false;
+        }
+        
+        // Drawing functions
+        function clearBanana() {
+            canvas.fillStyle = backgroundColor;
+            canvas.beginPath();
+            canvas.arc(x, y, bananaRadius + 2, 0, 2 * Math.PI, false);
+            canvas.fill();        
+        }
+        
+        function drawBanana() {           
             canvas.fillStyle = windowColors[0];
             canvas.beginPath();
             canvas.arc(x, y, bananaRadius, 0, 2 * Math.PI, false);
             canvas.fill();
-            
-            lastX = x;
-            lastY = y;
-            
-            return false;
+        }
+        
+        function killGorilla() {
+            var which = x > canvasElement.width / 2 ? 1 : 0;
+            var oldTurn = (turn + 1) % 2;
+            scores[oldTurn] += which == oldTurn ? -1 : 1;
+            document.getElementById("score0").textContent = scores[0];
+            document.getElementById("score1").textContent = scores[1];
+            // explosion
+            x = Math.round(gorillaPositions[which][0] + gorillaImage.width / 2);
+            y = Math.round(gorillaPositions[which][1] + gorillaImage.height / 2);
+            var oldR = bananaRadius;
+            bananaRadius *= 5;
+            clearBanana();
+            bananaRadius = oldR;
+            var refresh = setInterval(function() {
+                drawLandscape();
+                clearInterval(refresh);
+            }, 3000);
         }
     }
 }
