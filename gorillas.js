@@ -1,6 +1,8 @@
 function Gorillas(canvasElement) {
+    // Public API
     this.throwBanana = throwBanana;
     
+    // Constants
     var fps = 15;
     var gravity = 9.8 / fps;
     var quantum = 1000 / fps;
@@ -24,13 +26,16 @@ function Gorillas(canvasElement) {
     ];
     var HIT_NOTHING = 0;
     var HIT_BUILDING = 1;
-    var HIT_GORILLA = 2;
+    var HIT_GORILLA1 = 2;
+    var HIT_GORILLA2 = 3;
     
+    // Variables
     var turn = 0;
     var scores = [0, 0];
     var gorillaPositions = [];
     var running = false;
 
+    // Resources
     var canvas = canvasElement.getContext('2d');
     var sunImage = new Image();
     sunImage.src = 'sun.png';
@@ -45,7 +50,7 @@ function Gorillas(canvasElement) {
     }
 
     function between(value, min, width) {
-        return (value >= min) && (value < min + width);
+        return value >= min && value < min + width;
     }
 
     function colorEq(a, b) {
@@ -92,10 +97,10 @@ function Gorillas(canvasElement) {
             for (var i = 0, li = buildingWidth / windowWidth; i < li; i++) {
                 for (var j = 0, lj = buildingHeight / windowHeight; j < lj; j++) {
                     canvas.fillStyle = windowColors[Math.floor(Math.random() * 2)];
-                    canvas.fillRect(buildingOffset + (i * windowWidth) + windowPaddingHeight,
-                            height - bottomBorder - (j * windowHeight) - windowPaddingWidth,
-                            windowWidth - (windowPaddingWidth * 2),
-                            -windowHeight + (windowPaddingHeight * 2));
+                    canvas.fillRect(buildingOffset + i * windowWidth + windowPaddingHeight,
+                            height - bottomBorder - j * windowHeight - windowPaddingWidth,
+                            windowWidth - windowPaddingWidth * 2,
+                            -windowHeight + windowPaddingHeight * 2);
                 }                
             }
 
@@ -118,6 +123,7 @@ function Gorillas(canvasElement) {
     }
     
     function throwBanana(angle, speed) {
+        // One at a time
         if (!running) {
             running = true;
             var bananaRadius = 5;
@@ -134,8 +140,8 @@ function Gorillas(canvasElement) {
                 clearBanana();
                 clearSun();
 
-                x += (quantum / 1000) * velocity[0];
-                y += (quantum / 1000) * velocity[1];
+                x += velocity[0] / fps;
+                y += velocity[1] / fps;
 
                 var hit = hitTest();
                 drawSun();
@@ -147,7 +153,11 @@ function Gorillas(canvasElement) {
                     stop();
                     clearBanana();
                     break;
-                case HIT_GORILLA:
+                case HIT_GORILLA1:
+                    stop();
+                    killGorilla()
+                    break;
+                case HIT_GORILLA2:
                     stop();
                     killGorilla()
                     break;
@@ -167,13 +177,18 @@ function Gorillas(canvasElement) {
             var unitV = [velocity[0] / magV, velocity[1] / magV];
             var testPixel = [Math.round(x + unitV[0] * bananaRadius), 
                              Math.round(y + unitV[1] * bananaRadius)];
+            if (between(testPixel[0], gorillaPositions[0][0], gorillaImage.width)
+                && between(testPixel[1], gorillaPositions[0][1], gorillaImage.height)) {
+                return HIT_GORILLA1;
+            }
+            if (between(testPixel[0], gorillaPositions[1][0], gorillaImage.width)
+                && between(testPixel[1], gorillaPositions[1][1], gorillaImage.height)) {
+                return HIT_GORILLA2;
+            }
             netscape.security.PrivilegeManager.enablePrivilege("UniversalBrowserRead");
             if (between(testPixel[0], 0, canvasElement.width) &&
                 between(testPixel[1], 0, canvasElement.height)) {
                 var pixel = canvas.getImageData(testPixel[0], testPixel[1], 1, 1);
-                if (colorEq(pixel.data, gorillaTest)) {
-                    return HIT_GORILLA;
-                }
                 if (!colorEq(pixel.data, backgroundTest)) {
                     return HIT_BUILDING;
                 }
